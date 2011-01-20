@@ -50,4 +50,6 @@ do { sub DDXSTest::foo { 'DDXSTest::foo' } () },
     weaken($y->[0]);
     $y;
   }
-]
+],
+[ simple_object => { object => bless({}, 'Class') } ],
+[ double_object => { o1 => bless({}, 'Class'), o2 => bless({}, 'Class') } ],
