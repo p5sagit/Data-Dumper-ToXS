@@ -1,3 +1,7 @@
+use strictures 1;
+# disable the "Useless use of anonymous list ([]) in void context"
+# warning so we can perl -c this file during development
+no warnings 'void';
 [
   data_structure =>
   {
@@ -25,4 +29,8 @@
         ]
       };
     }
-]
+],
+do { sub DDXSTest::foo { 'DDXSTest::foo' } () },
+[
+  global_sub => { foo => \&DDXSTest::foo }
+];

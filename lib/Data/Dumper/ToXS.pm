@@ -2,7 +2,8 @@ package Data::Dumper::ToXS;
 
 our (%ix, %seen);
 
-sub newix { $_[0].'['.($ix{$_[0]}++).']' }
+sub _newix { $_[0].'['.($ix{$_[0]}++).']' }
+sub _getglob { \*{$_[0]} }
 
 use B qw(svref_2object cstring);
 use Scalar::Util qw(refaddr);
@@ -63,7 +64,7 @@ sub _generate_target {
   my ($self, $name, $ref) = @_;
   local %ix = map +($_ => 0), qw(av hv sv);
   local %seen;
-  my $first = newix('sv');
+  my $first = _newix('sv');
   my $body = $self->_dump_svrv($first, $ref);
   my $vars = join '', map +(
     $ix{$_} ? "  ${\uc}* ${_}[$ix{$_}];\n" : ""
@@ -85,25 +86,35 @@ sub _dump_svrv {
   } else {
     $seen{$ref} = $ix;
     if ($r eq 'SCALAR') {
-      my $t_ix = newix('sv');
+      my $t_ix = _newix('sv');
       join '',
         $self->_dump_sv($t_ix, $ref),
         "  ${ix} = newRV_noinc(${t_ix});\n";
     } elsif ($r eq 'HASH') {
-      my $t_ix = newix('hv');
+      my $t_ix = _newix('hv');
       join '',
         $self->_dump_hv($t_ix, $ref),
         "  ${ix} = newRV_noinc((SV *)${t_ix});\n";
     } elsif ($r eq 'ARRAY') {
-      my $t_ix = newix('av');
+      my $t_ix = _newix('av');
       join '',
         $self->_dump_av($t_ix, $ref),
         "  ${ix} = newRV_noinc((SV *)${t_ix});\n";
     } elsif ($r eq 'REF') {
-      my $t_ix = newix('sv');
+      my $t_ix = _newix('sv');
       join '',
         $self->_dump_svrv($t_ix, $$ref),
         "  ${ix} = newRV_noinc(${t_ix});\n";
+    } elsif ($r eq 'CODE') {
+      my $full_name = join '::',
+        map $_->NAME, map +($_->GV->STASH, $_->GV), svref_2object($ref);
+      if (*{_getglob($full_name)}{CODE}||'' eq $ref) {
+        # GV_ADD strikes me as more likely to DWIM than to simply blow up
+        # if the generated routine gets called before the method is declared.
+        "  ${ix} = newRV_inc((SV *) get_cv(${\cstring $full_name}, GV_ADD));\n";
+      } else {
+        die "Can't find ${ref} at ${full_name}";
+      }
     } else {
       die "Can't handle reftype ${r}";
     }
@@ -136,7 +147,7 @@ sub _dump_hv {
   join '',
     "  ${ix} = newHV();\n",
     map {
-      my $t_ix = newix('sv');
+      my $t_ix = _newix('sv');
       ($self->_dump_sv($t_ix, \($ref->{$_})),
       "  hv_stores(${ix}, ${\cstring $_}, ${t_ix});\n")
     } sort keys %$ref;
@@ -147,7 +158,7 @@ sub _dump_av {
   join '',
     "  ${ix} = newAV();\n",
     map {
-      my $t_ix = newix('sv');
+      my $t_ix = _newix('sv');
       $self->_dump_sv($t_ix, \($ref->[$_])),
       "  av_push(${ix}, ${t_ix});\n"
     } 0 .. $#$ref;
