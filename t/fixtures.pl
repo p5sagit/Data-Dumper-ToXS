@@ -2,6 +2,7 @@ use strictures 1;
 # disable the "Useless use of anonymous list ([]) in void context"
 # warning so we can perl -c this file during development
 no warnings 'void';
+use Scalar::Util qw(weaken);
 [
   data_structure =>
   {
@@ -33,4 +34,20 @@ no warnings 'void';
 do { sub DDXSTest::foo { 'DDXSTest::foo' } () },
 [
   global_sub => { foo => \&DDXSTest::foo }
-];
+],
+[
+  weaken_1 => do {
+    my $x = 1;
+    my $y = [ \$x, \$x, \$x ];
+    weaken($y->[1]);
+    $y;
+  }
+],
+[
+  weaken_0 => do {
+    my $x = 1;
+    my $y = [ \$x, \$x, \$x ];
+    weaken($y->[0]);
+    $y;
+  }
+]

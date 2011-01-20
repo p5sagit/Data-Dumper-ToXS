@@ -1,12 +1,12 @@
 package Data::Dumper::ToXS;
 
-our (%ix, %seen);
+our (%ix, %seen, $weaken);
 
 sub _newix { $_[0].'['.($ix{$_[0]}++).']' }
 sub _getglob { \*{$_[0]} }
 
 use B qw(svref_2object cstring);
-use Scalar::Util qw(refaddr);
+use Scalar::Util qw(refaddr isweak);
 use Moo;
 
 has target_package => (is => 'ro', required => 1);
@@ -64,6 +64,7 @@ sub _generate_target {
   my ($self, $name, $ref) = @_;
   local %ix = map +($_ => 0), qw(av hv sv);
   local %seen;
+  local $weaken = '';
   my $first = _newix('sv');
   my $body = $self->_dump_svrv($first, $ref);
   my $vars = join '', map +(
@@ -72,7 +73,7 @@ sub _generate_target {
   <<"END";
 SV * ${name} (pTHX)
 {
-${vars}${body}  return ${first};
+${vars}${body}${weaken}  return ${first};
 }
 END
 }
@@ -80,6 +81,7 @@ END
 sub _dump_svrv {
   my ($self, $ix, $ref) = @_;
   my $r = ref($ref);
+  $weaken .= "  sv_rvweaken(${ix});\n" if isweak($_[2]);
   if ($seen{$ref}) {
     # already seen this reference so make a copy
     "  ${ix} = newSVsv($seen{$ref});\n";
